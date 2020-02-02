@@ -4,8 +4,8 @@ import urllib.parse
 from github import Github
 from gitlab import Gitlab
 
-from saas_exporter.saas_repo import SaasRepo
-from saas_exporter.repo import GHRepo, GLRepo
+from saas.saas_repo import SaasRepo
+from saas.repo import GHRepo, GLRepo
 
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
 GITLAB_SERVER = os.getenv('GITLAB_SERVER')
