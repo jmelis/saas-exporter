@@ -26,7 +26,7 @@ saas_repos = ['https://github.com/app-sre/saas-app-interface',
 
 for repo in saas_repos:
     if repo.startswith(GITLAB_SERVER):
-        repo = inject_auth(repo, GITHUB_TOKEN)
+        repo = inject_auth(repo, GITLAB_TOKEN)
 
     saas_repo = SaasRepo(repo)
 
