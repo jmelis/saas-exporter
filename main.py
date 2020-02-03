@@ -24,31 +24,32 @@ def inject_auth(url, auth):
 saas_repos = ['https://github.com/app-sre/saas-app-interface',
               'https://gitlab.cee.redhat.com/service/saas-app-sre-observability.git']
 
-for repo in saas_repos:
-    if repo.startswith(GITLAB_SERVER):
-        repo = inject_auth(repo, GITLAB_TOKEN)
+if __name__ == "__main__":
+    for repo in saas_repos:
+        if repo.startswith(GITLAB_SERVER):
+            repo = inject_auth(repo, GITLAB_TOKEN)
 
-    saas_repo = SaasRepo(repo)
+        saas_repo = SaasRepo(repo)
 
-    for service in saas_repo.services:
-        url = service['url']
+        for service in saas_repo.services:
+            url = service['url']
 
-        if url.startswith(GHRepo.PREFIX):
-            repo = GHRepo(gh_client, url)
-        elif url.startswith(gl_client.url):
-            repo = GLRepo(gl_client, url)
-        else:
-            raise Exception(f'Unknown repo: {url}')
+            if url.startswith(GHRepo.PREFIX):
+                repo = GHRepo(gh_client, url)
+            elif url.startswith(gl_client.url):
+                repo = GLRepo(gl_client, url)
+            else:
+                raise Exception(f'Unknown repo: {url}')
 
-        # TODO: handle CommitNotFound
-        i, commit = repo.get_commit(service['hash'])
+            # TODO: handle CommitNotFound
+            i, commit = repo.get_commit(service['hash'])
 
-        stats = {
-            'context': service['context'],
-            'service': service['name'],
-            'upstream_commits': repo.total_commits,
-            'commit_index': repo.total_commits - i,
-            'commit_ts': repo.commit_ts(commit)
-        }
+            stats = {
+                'context': service['context'],
+                'service': service['name'],
+                'upstream_commits': repo.total_commits,
+                'commit_index': repo.total_commits - i,
+                'commit_ts': repo.commit_ts(commit)
+            }
 
-        print(stats)
+            print(stats)
