@@ -40,13 +40,15 @@ for repo in saas_repos:
         else:
             raise Exception(f'Unknown repo: {url}')
 
-        pos, ts = repo.get_commit_info(service['hash'])
+        # TODO: handle CommitNotFound
+        i, commit = repo.get_commit(service['hash'])
+
         stats = {
             'context': service['context'],
             'service': service['name'],
             'upstream_commits': repo.total_commits,
-            'commit_index': pos,
-            'commit_ts': ts
+            'commit_index': repo.total_commits - i,
+            'commit_ts': repo.commit_ts(commit)
         }
 
         print(stats)

@@ -18,50 +18,71 @@ def _get_repo_name(full_url, prefix):
     return url
 
 
-class GHRepo():
+class CommitNotFound(Exception):
+    pass
+
+
+class Repo():
+    def __init__(self, client, full_repo):
+        self.client = client
+        self.repo = self._get_repo(full_repo)
+        self.commits = self._get_commits()
+
+    def get_commit(self, sha):
+        for i, commit in enumerate(self.commits):
+            if self._commit_hash(commit) == sha:
+                return (i, commit)
+
+        # not found
+        raise CommitNotFound()
+
+    def commit_ts(self, commit):
+        raw_date = self._commit_date(commit)
+        commit_date = parser.parse(raw_date)
+        return datetime.timestamp(commit_date)
+
+
+class GHRepo(Repo):
     PREFIX = 'https://github.com/'
 
-    def __init__(self, gh_client, full_repo):
+    def _get_repo(self, full_repo):
         repo_name = _get_repo_name(full_repo, self.PREFIX)
-        self.repo = gh_client.get_repo(repo_name)
-        self.commits = [c for c in self.repo.get_commits()]
+        return self.client.get_repo(repo_name)
+
+    def _get_commits(self):
+        return self.repo.get_commits()
+
+    @property
+    def total_commits(self):
+        return self.commits.totalCount
+
+    @staticmethod
+    def _commit_date(commit):
+        return commit.raw_data['commit']['author']['date']
+
+    @staticmethod
+    def _commit_hash(commit):
+        return commit.sha
+
+
+class GLRepo(Repo):
+    def _get_repo(self, full_repo):
+        repo_name = _get_repo_name(full_repo, self.client.url)
+        return self.client.projects.get(repo_name)
+
+    def _get_commits(self):
+        params = {'ref_name': 'master'}
+        return self.repo.commits.list(all=True,
+                                      query_parameters=params)
 
     @property
     def total_commits(self):
         return len(self.commits)
 
-    def get_commit_info(self, sha):
-        for i, commit in enumerate(self.commits):
-            if commit.sha == sha:
-                raw_date = commit.raw_data['commit']['author']['date']
-                commit_date = parser.parse(raw_date)
-                ts = datetime.timestamp(commit_date)
+    @staticmethod
+    def _commit_date(commit):
+        return commit.attributes['committed_date']
 
-                pos = self.total_commits - i
-
-                return (pos, ts)
-
-
-class GLRepo():
-    def __init__(self, gl_client, full_repo):
-        repo_name = _get_repo_name(full_repo, gl_client.url)
-        self.repo = gl_client.projects.get(repo_name)
-        self.commits = self.repo.commits.list(all=True,
-                                              query_parameters={
-                                                  'ref_name': 'master'
-                                              })
-
-    @property
-    def total_commits(self):
-        return len(self.commits)
-
-    def get_commit_info(self, sha):
-        for i, commit in enumerate(self.commits):
-            if commit.id == sha:
-                raw_date = commit.attributes['committed_date']
-                commit_date = parser.parse(raw_date)
-                ts = datetime.timestamp(commit_date)
-
-                pos = self.total_commits - i
-
-                return (pos, ts)
+    @staticmethod
+    def _commit_hash(commit):
+        return commit.id
