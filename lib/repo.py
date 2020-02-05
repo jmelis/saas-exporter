@@ -13,10 +13,10 @@ def _get_repo_name(full_url, prefix):
         url = url[len(prefix):]
 
     if url.endswith('/'):
-        url = url[:len('/')]
+        url = url[:-len('/')]
 
     if url.endswith('.git'):
-        url = url[:len('.git')]
+        url = url[:-len('.git')]
 
     return url
 
