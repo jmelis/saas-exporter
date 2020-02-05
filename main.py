@@ -7,9 +7,10 @@ from github import Github
 from gitlab import Gitlab
 from prometheus_client import start_http_server
 from prometheus_client.core import REGISTRY
+from sentry_sdk import init as sentry_sdk_init
 
 from lib.saas_repo import get_saas_repos, SaasRepo
-from lib.repo import GHRepo, GLRepo
+from lib.repo import GHRepo, GLRepo, CommitNotFound
 from lib.metrics import SaasCollector
 from lib.gql import GqlApi
 
@@ -17,18 +18,25 @@ logger = logging.getLogger()
 
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
-SLEEP_TIME = 300
+GITHUB_TOKEN = os.environ['GITHUB_TOKEN']
+GITLAB_SERVER = os.environ['GITLAB_SERVER']
+GITLAB_TOKEN = os.environ['GITLAB_TOKEN']
 
-GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
-GITLAB_SERVER = os.getenv('GITLAB_SERVER')
-GITLAB_TOKEN = os.getenv('GITLAB_TOKEN')
-
-APP_INTERFACE_URL = os.getenv('APP_INTERFACE_URL')
-APP_INTERFACE_TOKEN = os.getenv('APP_INTERFACE_TOKEN')
+APP_INTERFACE_URL = os.environ['APP_INTERFACE_URL']
+APP_INTERFACE_TOKEN = os.environ['APP_INTERFACE_TOKEN']
 
 gh_client = Github(GITHUB_TOKEN)
 gl_client = Gitlab(GITLAB_SERVER, private_token=GITLAB_TOKEN)
 gql_client = GqlApi(APP_INTERFACE_URL, APP_INTERFACE_TOKEN)
+
+if os.getenv('SLEEP_TIME'):
+    SLEEP_TIME = int(os.environ['SLEEP_TIME'])
+else:
+    SLEEP_TIME = 300
+
+
+if os.getenv('DSN'):
+    sentry_sdk_init(os.environ['DSN'])
 
 
 def inject_auth(url, auth):
@@ -39,30 +47,41 @@ def inject_auth(url, auth):
 
 def get_stats(saas_repos):
     stats = []
-    for repo in saas_repos:
-        logging.info(['saas_repo', repo])
+    for saas_repo_full in saas_repos:
+        logging.info(['saas_repo', saas_repo_full])
 
-        if repo.startswith(GITLAB_SERVER):
-            repo = inject_auth(repo, GITLAB_TOKEN)
+        if saas_repo_full.startswith(GITLAB_SERVER):
+            saas_repo_auth = inject_auth(saas_repo_full, GITLAB_TOKEN)
+        else:
+            saas_repo_auth = saas_repo_full
 
-        saas_repo = SaasRepo(repo)
+        try:
+            saas_repo = SaasRepo(saas_repo_auth)
+        except Exception as e:
+            logging.error(e)
+            continue
 
         for service in saas_repo.services:
-            url = service['url']
+            upstream_url = service['url']
             context = service['context']
             name = service['name']
 
             logging.info(['fetching_stats', context, name])
 
-            if url.startswith(GHRepo.PREFIX):
-                repo = GHRepo(gh_client, url)
-            elif url.startswith(gl_client.url):
-                repo = GLRepo(gl_client, url)
+            if upstream_url.startswith(GHRepo.PREFIX):
+                repo = GHRepo(gh_client, upstream_url)
+            elif upstream_url.startswith(gl_client.url):
+                repo = GLRepo(gl_client, upstream_url)
             else:
-                raise Exception(f'Unknown repo: {url}')
+                logging.error(['Invalid upstream repo',
+                               saas_repo_full, upstream_url])
 
-            # TODO: handle CommitNotFound
-            i, commit = repo.get_commit(service['hash'])
+            try:
+                i, commit = repo.get_commit(service['hash'])
+            except CommitNotFound:
+                logging.error(['CommitNotFound', saas_repo_full, upstream_url,
+                               context, name, service['hash']])
+                continue
 
             stats.append({
                 'context': context,
@@ -82,10 +101,8 @@ if __name__ == "__main__":
     REGISTRY.register(collector)
 
     while True:
-        # TODO: handle exception
         saas_repos = get_saas_repos(gql_client)
 
-        # TODO: handle exception
         collector.stats = get_stats(saas_repos)
 
         time.sleep(SLEEP_TIME)

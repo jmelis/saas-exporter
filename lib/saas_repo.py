@@ -5,7 +5,10 @@ from pathlib import Path
 import git
 import yaml
 
+from lib.retry import retry
 
+
+@retry()
 def get_saas_repos(gql):
     query = """
         {
