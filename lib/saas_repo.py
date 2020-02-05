@@ -6,6 +6,29 @@ import git
 import yaml
 
 
+def get_saas_repos(gql):
+    query = """
+        {
+            apps: apps_v1 {
+                codeComponents {
+                name
+                resource
+                url
+                }
+            }
+        }
+    """
+
+    apps = gql.query(query)['apps']
+
+    return [
+        c['url']
+        for app in apps
+        for c in (app.get('codeComponents', {}) or {})
+        if c['resource'] == "saasrepo"
+    ]
+
+
 class SaasRepo():
     def __init__(self, url):
         self.url = url
