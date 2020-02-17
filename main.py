@@ -38,8 +38,14 @@ else:
     SLEEP_TIME = 300
 
 
-if os.getenv('DSN'):
-    sentry_sdk_init(os.environ['DSN'])
+if SENTRY_DSN:
+    def before_breadcrumb(crumb, hint):
+        # remove authentication from http urls
+        if crumb['category'] == 'subprocess':
+            crumb['message'] = re.sub(r'//.*?@', '//***@', crumb['message'])
+        return crumb
+
+    sentry_sdk_init(SENTRY_DSN, before_breadcrumb=before_breadcrumb)
 
 
 def inject_auth(url, auth):
