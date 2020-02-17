@@ -2,6 +2,7 @@ import os
 import urllib.parse
 import time
 import logging
+import re
 
 from github import Github
 from gitlab import Gitlab
@@ -24,6 +25,8 @@ GITLAB_TOKEN = os.environ['GITLAB_TOKEN']
 
 APP_INTERFACE_URL = os.environ['APP_INTERFACE_URL']
 APP_INTERFACE_TOKEN = os.environ['APP_INTERFACE_TOKEN']
+
+SENTRY_DSN = os.getenv('SENTRY_DSN')
 
 gh_client = Github(GITHUB_TOKEN)
 gl_client = Gitlab(GITLAB_SERVER, private_token=GITLAB_TOKEN)
@@ -65,6 +68,12 @@ def get_stats(saas_repos):
             upstream_url = service['url']
             context = service['context']
             name = service['name']
+            sha = service['hash']
+
+            if sha in ['none', 'ignore', None]:
+                logging.info(['ignore', saas_repo_full, upstream_url,
+                              context, name, sha])
+                continue
 
             logging.info(['fetching_stats', context, name])
 
@@ -77,17 +86,17 @@ def get_stats(saas_repos):
                                saas_repo_full, upstream_url])
 
             try:
-                i, commit = repo.get_commit(service['hash'])
+                commit_index, commit = repo.get_commit(sha)
             except CommitNotFound:
                 logging.error(['CommitNotFound', saas_repo_full, upstream_url,
-                               context, name, service['hash']])
+                               context, name, sha])
                 continue
 
             stats.append({
                 'context': context,
                 'service': name,
                 'saas_upstream_commits': repo.total_commits,
-                'saas_commit_index': repo.total_commits - i,
+                'saas_commit_index': repo.total_commits - commit_index,
                 'saas_commit_ts': repo.commit_ts(commit)
             })
 

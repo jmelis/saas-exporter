@@ -32,6 +32,9 @@ class Repo():
         self.commits = self._get_commits()
 
     def get_commit(self, sha):
+        if sha == 'master':
+            return (0, self.commits[0])
+
         for i, commit in enumerate(self.commits):
             if self._commit_hash(commit) == sha:
                 return (i, commit)
