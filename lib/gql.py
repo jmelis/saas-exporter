@@ -28,5 +28,3 @@ class GqlApi(object):
                 "server response."))
 
         return result['data']
-
-
